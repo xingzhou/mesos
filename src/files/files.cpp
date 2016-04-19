@@ -370,6 +370,11 @@ Future<Response> FilesProcess::read(
     }
 
     length = result.get();
+
+    if (length < 0) {
+      return BadRequest(
+        strings::format("Negative length provided: %d.\n", length).get());
+    }
   }
 
   Result<string> resolvedPath = resolve(path.get());

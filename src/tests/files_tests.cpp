@@ -172,6 +172,23 @@ TEST_F(FilesTest, ReadTest)
   AWAIT_EXPECT_RESPONSE_STATUS_EQ(OK().status, response);
   AWAIT_EXPECT_RESPONSE_BODY_EQ(stringify(expected), response);
 
+  // Read a valid file with nagative length
+  response = process::http::get(upid, "read", "path=/myname&length=-2");
+
+  AWAIT_EXPECT_RESPONSE_STATUS_EQ(BadRequest().status, response);
+  AWAIT_EXPECT_RESPONSE_BODY_EQ(
+    "Negative length provided: -2.\n",
+    response);
+
+  // Read a valid file with positive length
+  expected.values["offset"] = 0;
+  expected.values["data"] = "bo";
+
+  response = process::http::get(upid, "read", "path=/myname&offset=0&length=2");
+
+  AWAIT_EXPECT_RESPONSE_STATUS_EQ(OK().status, response);
+  AWAIT_EXPECT_RESPONSE_BODY_EQ(stringify(expected), response);
+
   // Missing file.
   AWAIT_EXPECT_RESPONSE_STATUS_EQ(
       NotFound().status,
