@@ -12,14 +12,14 @@
           {templateUrl: 'static/framework.html', controller: 'FrameworkCtrl'})
         .when('/offers',
           {templateUrl: 'static/offers.html', controller: 'OffersCtrl'})
-        .when('/slaves',
-          {templateUrl: 'static/slaves.html', controller: 'SlavesCtrl'})
-        .when('/slaves/:slave_id',
-          {templateUrl: 'static/slave.html', controller: 'SlaveCtrl'})
-        .when('/slaves/:slave_id/frameworks/:framework_id',
-          {templateUrl: 'static/slave_framework.html', controller: 'SlaveFrameworkCtrl'})
-        .when('/slaves/:slave_id/frameworks/:framework_id/executors/:executor_id',
-          {templateUrl: 'static/slave_executor.html', controller: 'SlaveExecutorCtrl'})
+        .when('/agents',
+          {templateUrl: 'static/agents.html', controller: 'AgentsCtrl'})
+        .when('/agents/:agent_id',
+          {templateUrl: 'static/agent.html', controller: 'AgentCtrl'})
+        .when('/agents/:agent_id/frameworks/:framework_id',
+          {templateUrl: 'static/agent_framework.html', controller: 'AgentFrameworkCtrl'})
+        .when('/agents/:agent_id/frameworks/:framework_id/executors/:executor_id',
+          {templateUrl: 'static/agent_executor.html', controller: 'AgentExecutorCtrl'})
 
         // Use a non-falsy template so the controller will still be executed.
         // Since the controller is intended only to redirect, the blank template
@@ -30,9 +30,9 @@
         // feature:
         //
         //     https://github.com/angular/angular.js/issues/1838
-        .when('/slaves/:slave_id/frameworks/:framework_id/executors/:executor_id/browse',
-          {template: ' ', controller: 'SlaveExecutorRerouterCtrl'})
-        .when('/slaves/:slave_id/browse',
+        .when('/agents/:agent_id/frameworks/:framework_id/executors/:executor_id/browse',
+          {template: ' ', controller: 'AgentExecutorRerouterCtrl'})
+        .when('/agents/:agent_id/browse',
           {templateUrl: 'static/browse.html', controller: 'BrowseCtrl'})
         .otherwise({redirectTo: '/'});
 
