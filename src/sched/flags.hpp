@@ -99,10 +99,17 @@ public:
         "master. Use the default '" + std::string(DEFAULT_AUTHENTICATEE) + "'\n"
         "or load an alternate authenticatee module using MESOS_MODULES.",
         DEFAULT_AUTHENTICATEE);
+
+    add(&Flags::master_detector,
+        "master_detector",
+        "The symbol name of the master detector to use. This symbol\n"
+        "should exist in a module specified through the --modules flag.\n"
+        "Cannot be used in conjunction with --master.\n");
   }
 
   Duration registration_backoff_factor;
   Option<Modules> modules;
+  Option<std::string> master_detector;
   std::string authenticatee;
 };
 

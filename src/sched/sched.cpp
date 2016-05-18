@@ -130,7 +130,7 @@ class DetectorPool
 public:
   virtual ~DetectorPool() {}
 
-  static Try<shared_ptr<MasterDetector>> get(const string& url)
+  static Try<shared_ptr<MasterDetector>> get(const string& url, const Option<string>& module)
   {
     synchronized (DetectorPool::instance()->poolMutex) {
       // Get or create the `weak_ptr` map entry.
@@ -142,7 +142,7 @@ public:
         return result;
       } else {
         // Else, create the master detector and record it in the map.
-        Try<MasterDetector*> detector = MasterDetector::create(url);
+        Try<MasterDetector*> detector = MasterDetector::create(url, module);
         if (detector.isError()) {
           return Error(detector.error());
         }
@@ -1838,21 +1838,6 @@ Status MesosSchedulerDriver::start()
       return status;
     }
 
-    if (detector == NULL) {
-      Try<shared_ptr<MasterDetector>> detector_ = DetectorPool::get(url);
-
-      if (detector_.isError()) {
-        status = DRIVER_ABORTED;
-        string message = "Failed to create a master detector for '" +
-        master + "': " + detector_.error();
-        scheduler->error(this, message);
-        return status;
-      }
-
-      // Save the detector so we can delete it later.
-      detector = detector_.get();
-    }
-
     // Load scheduler flags.
     internal::scheduler::Flags flags;
     Try<flags::Warnings> load = flags.load("MESOS_");
@@ -1877,6 +1862,28 @@ Status MesosSchedulerDriver::start()
         scheduler->error(this, "Error loading modules: " + result.error());
         return status;
       }
+    }
+
+    if (detector == NULL) {
+      if (flags.master_detector.isSome() && master != "") {
+        status = DRIVER_ABORTED;
+        scheduler->error(this, "Only one of --master or --master_detector options "
+          "should be specified.");
+        return status;
+      }
+
+      Try<shared_ptr<MasterDetector>> detector_ = DetectorPool::get(url, flags.master_detector);
+
+      if (detector_.isError()) {
+        status = DRIVER_ABORTED;
+        string message = "Failed to create a master detector for '" +
+        master + "': " + detector_.error();
+        scheduler->error(this, message);
+        return status;
+      }
+
+      // Save the detector so we can delete it later.
+      detector = detector_.get();
     }
 
     CHECK(process == NULL);
