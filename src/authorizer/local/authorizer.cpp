@@ -251,6 +251,17 @@ public:
         return authorized(request, acls_);
         break;
 
+      case authorization::GET_WEIGHTS_WITH_ROLE:
+        foreach (const ACL::GetWeights& acl, acls.get_weights()) {
+          GenericACL acl_;
+          acl_.subjects = acl.principals();
+          acl_.objects = acl.roles();
+
+          acls_.push_back(acl_);
+        }
+
+        return authorized(request, acls_);
+        break;
       case authorization::UPDATE_WEIGHTS_WITH_ROLE:
         foreach (const ACL::UpdateWeights& acl, acls.update_weights()) {
           GenericACL acl_;

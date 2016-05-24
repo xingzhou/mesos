@@ -54,24 +54,60 @@ namespace internal {
 namespace master {
 
 Future<http::Response> Master::WeightsHandler::get(
-    const http::Request& request) const
+    const http::Request& request,
+    const Option<std::string>& principal) const
 {
   VLOG(1) << "Handling get weights request.";
 
   // Check that the request type is GET which is guaranteed by the master.
   CHECK_EQ("GET", request.method);
 
-  RepeatedPtrField<WeightInfo> weightInfos;
+  vector<WeightInfo> weightInfos;
+  weightInfos.reserve(master->weights.size());
 
-  // Create an entry for each weight.
-  foreachpair (const std::string& role, double weight, master->weights) {
+  foreachpair (const string& role, const double& weight, master->weights) {
     WeightInfo weightInfo;
     weightInfo.set_role(role);
     weightInfo.set_weight(weight);
-    weightInfos.Add()->CopyFrom(weightInfo);
+    weightInfos.push_back(weightInfo);
   }
 
-  return OK(JSON::protobuf(weightInfos), request.url.query.get("jsonp"));
+  // Create a list of authorization actions for each role we may return.
+  // TODO(alexr): Batch these actions once we have BatchRequest in authorizer.
+  list<Future<bool>> authorizedRoles;
+  foreach (const WeightInfo& info, weightInfos) {
+    authorizedRoles.push_back(authorizeGetWeights(principal, info.role()));
+  }
+
+  return process::collect(authorizedRoles)
+    .then(defer(master->self(),
+                [=](const list<bool> authorizedRolesCollected)
+                -> Future<http::Response> {
+                   return _get(request, weightInfos, authorizedRolesCollected);
+     }));
+}
+
+
+Future<http::Response> Master::WeightsHandler::_get(
+    const http::Request& request,
+    const vector<WeightInfo>& weightInfos,
+    const list<bool>& authorizedRoles) const
+{
+  CHECK(weightInfos.size() == authorizedRoles.size());
+
+  RepeatedPtrField<WeightInfo> filteredWeightInfos;
+
+  // Create an entry (including role and resources) for each weight,
+  // except those filtered out based on the authorizer's response.
+  auto weightInfoIt = weightInfos.begin();
+  foreach (const bool& authorized, authorizedRoles) {
+    if (authorized) {
+      filteredWeightInfos.Add()->CopyFrom(*weightInfoIt);
+    }
+    ++weightInfoIt;
+  }
+
+  return OK(JSON::protobuf(filteredWeightInfos), request.url.query.get("jsonp"));
 }
 
 
@@ -254,6 +290,32 @@ Future<bool> Master::WeightsHandler::authorize(
         }
         return true;
       });
+}
+
+
+Future<bool> Master::WeightsHandler::authorizeGetWeights(
+    const Option<string>& principal,
+    const string& role) const
+{
+  if (master->authorizer.isNone()) {
+    return true;
+  }
+
+  LOG(INFO) << "Authorizing principal '"
+            << (principal.isSome() ? principal.get() : "ANY")
+            << "' to get weights for role "
+            << role << ".";
+
+  authorization::Request request;
+  request.set_action(authorization::GET_WEIGHTS_WITH_ROLE);
+
+  if (principal.isSome()) {
+    request.mutable_subject()->set_value(principal.get());
+  }
+
+  request.mutable_object()->set_value(role);
+
+  return master->authorizer.get()->authorized(request);
 }
 
 } // namespace master {

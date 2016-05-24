@@ -64,6 +64,7 @@ enum Action {
   SET_QUOTA_WITH_ROLE = 8;  // [deprecated = true];
   DESTROY_QUOTA_WITH_PRINCIPAL = 9;  // [deprecated = true];
 
+  GET_WEIGHTS_WITH_ROLE = 14;
   UPDATE_WEIGHTS_WITH_ROLE = 10;
   GET_ENDPOINT_WITH_PATH = 11;
 }
