@@ -2491,6 +2491,114 @@ TEST_P(AgentAPITest, GetContainers)
   driver.join();
 }
 
+
+// This test verifies if we can retrieve file data in the agent.
+TEST_P(AgentAPITest, ReadFile)
+{
+  Files files;
+
+  // Now write a file.
+  ASSERT_SOME(os::write("file", "body"));
+  AWAIT_EXPECT_READY(files.attach("file", "myname"));
+
+  Future<Nothing> __recover = FUTURE_DISPATCH(_, &Slave::__recover);
+
+  StandaloneMasterDetector detector;
+  Try<Owned<cluster::Slave>> slave = StartSlave(&detector);
+  ASSERT_SOME(slave);
+
+  AWAIT_READY(__recover);
+
+  // Wait until the agent has finished recovery.
+  Clock::pause();
+  Clock::settle();
+
+  // Read a valid file.
+  v1::agent::Call v1Call;
+  v1Call.set_type(v1::agent::Call::READ_FILE);
+
+  v1Call.mutable_read_file()->set_offset(1);
+  v1Call.mutable_read_file()->set_length(2);
+  v1Call.mutable_read_file()->set_path("myname");
+
+  ContentType contentType = GetParam();
+
+  Future<v1::agent::Response> v1Response =
+    post(slave.get()->pid, v1Call, contentType);
+
+  AWAIT_READY(v1Response);
+
+  ASSERT_TRUE(v1Response.get().IsInitialized());
+  ASSERT_EQ(v1::agent::Response::READ_FILE, v1Response.get().type());
+
+  ASSERT_EQ("od", v1Response.get().read_file().data());
+  ASSERT_EQ(4, v1Response.get().read_file().size());
+
+  // Read a valid file with `offset >= size`, should return the size of file
+  // and empty data.
+  v1Call.mutable_read_file()->set_offset(5);
+
+  v1Response = post(slave.get()->pid, v1Call, contentType);
+  AWAIT_READY(v1Response);
+
+  ASSERT_TRUE(v1Response.get().IsInitialized());
+  ASSERT_EQ(v1::agent::Response::READ_FILE, v1Response.get().type());
+
+  ASSERT_EQ("", v1Response.get().read_file().data());
+  ASSERT_EQ(4, v1Response.get().read_file().size());
+
+  // Read a valid file without length and set `offset=0`, should read the
+  // entire file.
+  v1Call.mutable_read_file()->clear_length();
+  v1Call.mutable_read_file()->set_offset(0);
+
+  v1Response = post(slave.get()->pid, v1Call, contentType);
+  AWAIT_READY(v1Response);
+
+  ASSERT_TRUE(v1Response.get().IsInitialized());
+  ASSERT_EQ(v1::agent::Response::READ_FILE, v1Response.get().type());
+
+  ASSERT_EQ("body", v1Response.get().read_file().data());
+  ASSERT_EQ(4, v1Response.get().read_file().size());
+}
+
+
+// This test verifies that the client will receive a `NotFound` response when
+// it tries to make a `READ_FILE` call with an invalid path.
+TEST_P(AgentAPITest, ReadFileInvalidPath)
+{
+  Future<Nothing> __recover = FUTURE_DISPATCH(_, &Slave::__recover);
+
+  StandaloneMasterDetector detector;
+  Try<Owned<cluster::Slave>> slave = StartSlave(&detector);
+  ASSERT_SOME(slave);
+
+  AWAIT_READY(__recover);
+
+  // Wait until the agent has finished recovery.
+  Clock::pause();
+  Clock::settle();
+
+  // Read an invalid file.
+  v1::agent::Call v1Call;
+  v1Call.set_type(v1::agent::Call::READ_FILE);
+
+  v1Call.mutable_read_file()->set_offset(1);
+  v1Call.mutable_read_file()->set_length(2);
+  v1Call.mutable_read_file()->set_path("invalid_file");
+
+  ContentType contentType = GetParam();
+
+  Future<Response> response = process::http::post(
+    slave.get()->pid,
+    "api/v1",
+    createBasicAuthHeaders(DEFAULT_CREDENTIAL),
+    serialize(contentType, v1Call),
+    stringify(contentType));
+
+  AWAIT_EXPECT_RESPONSE_STATUS_EQ(NotFound().status, response);
+}
+
 } // namespace tests {
 } // namespace internal {
 } // namespace mesos {
